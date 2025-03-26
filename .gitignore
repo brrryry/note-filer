@@ -1,0 +1,8 @@
+# no env, that's where the tokens are :3
+.env
+
+# no node_modules, that's where the dependencies are
+node_modules
+
+# no package lock
+package-lock.json
