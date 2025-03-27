@@ -1,8 +1,12 @@
 # no env, that's where the tokens are :3
-.env
+bot/.env
 
 # no node_modules, that's where the dependencies are
-node_modules
+bot/node_modules
 
 # no package lock
-package-lock.json
+bot/package-lock.json
+
+# no venv or pycache
+model/.venv
+model/__pycache__
