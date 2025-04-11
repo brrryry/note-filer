@@ -1,5 +1,6 @@
 # no env, that's where the tokens are :3
 bot/.env
+model/.env
 
 # no node_modules, that's where the dependencies are
 bot/node_modules
@@ -10,3 +11,6 @@ bot/package-lock.json
 # no venv or pycache
 model/.venv
 model/__pycache__
+
+# no data storing, but keep the data folder
+model/data/*
