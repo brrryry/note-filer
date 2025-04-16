@@ -9,3 +9,9 @@ def num_categories(df: pd.DataFrame) -> int:
     Returns the number of categories in the dataframe.
     """
     return len(df['category'].unique())
+
+def get_categories(df: pd.DataFrame) -> list:
+    """
+    Returns the categories in the dataframe.
+    """
+    return df['category'].unique().tolist()
