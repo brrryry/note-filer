@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 @app.route("/message", methods=["POST"])
 def mark_message():
-    data = request.get_json()
+    data = request.get_json() # get request body data
 
     # get req body data
     message = data.get("message")
@@ -22,7 +22,7 @@ def mark_message():
     guild = data.get("guild")
     timestamp = data.get("timestamp")
 
-    # error checking
+    # error checking - just checking if anything in the body is missing or not a string.
     if not message: return jsonify({"error": "Message is required"}), 400
     if not category: return jsonify({"error": "Category is required"}), 400
     if not user: return jsonify({"error": "User is required"}), 400
@@ -35,9 +35,11 @@ def mark_message():
     if not isinstance(guild, str): return jsonify({"error": "Guild must be a string"}), 400
     if not isinstance(timestamp, str): return jsonify({"error": "Timestamp must be a string"}), 400
 
+    # arbitrary length checks - just to make sure the data is not too long
     if len(message) > 500: return jsonify({"error": "Message is too long"}), 400
     if len(category) > 50: return jsonify({"error": "Category is too long"}), 400
     
+    # check if the data folder exists. if not, create it.
     df = None
 
     if not os.path.exists(f"{os.getenv('DATA_FOLDER')}/{guild}.csv"): df = pd.DataFrame(columns=["message", "category", "user", "guild", "timestamp"])
@@ -49,6 +51,8 @@ def mark_message():
     df.to_csv(f"{os.getenv('DATA_FOLDER')}/{guild}.csv", index=False)
     return jsonify({"message": "Message marked successfully", "categories": num_categories(df), "newcategory": num_categories(df) > current_categories}), 200
 
+
+# this is a test endpoint to get the number of categories in the dataframe
 @app.route("/categories/<guild>", methods=["GET"])
 def categories(guild):
     if not os.path.exists(f"{os.getenv('DATA_FOLDER')}/{guild}.csv"): return jsonify({"error": "Guild not found"}), 404 # this should not happen, but just a failsafe...
@@ -63,6 +67,7 @@ def categories(guild):
     return jsonify({"categories": categories}), 200
 
 
+# this is a test endpoint.
 @app.route("/")
 def hello_world():
     return "Hello, World!"

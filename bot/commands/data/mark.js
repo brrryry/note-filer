@@ -27,7 +27,7 @@ async function execute(message) {
     // get target message data
     let target_message = null
 
-
+    // if no message id is provided, get the last non-bot message in the channel
     if (!message_id) {
         //get last non-bot message
         target_message = await message.channel.messages.fetch({ limit: 10, before: message.id }).then(messages => {
@@ -40,12 +40,11 @@ async function execute(message) {
         })
         if (!target_message) return;
 
-    } else {
+    } else { //otherwise, get the message straight by ID.
         target_message = await message.channel.messages.fetch(message_id).catch(err => {
             message.reply("I couldn't find that message. Please provide a valid message ID.");
         })
         if(!target_message) return;
-        console.log(target_message)
     }
 
     if (category == null || target_message == null) {
@@ -53,6 +52,7 @@ async function execute(message) {
     }
 
     // just to make sure we don't make a discord channel that has weird characters in it
+    //the regex allows only alphabetic characters and underscores
     if (!/^[a-zA-Z0-9_]+$/.test(category)) {
         message.reply("Please provide a valid category. Only alphanumeric characters and underscores are allowed.");
         return;
@@ -61,14 +61,14 @@ async function execute(message) {
     // send data to API
     let url = process.env.API_URL + '/message'
     let data = {
-        message: target_message.content,
-        category: category,
-        user: target_message.author.id,
-        guild: target_message.guild.id,
-        timestamp: target_message.createdTimestamp.toString()
+        message: target_message.content, //the content of the message
+        category: category, //the target category
+        user: target_message.author.id, //the id of the user who sent the message
+        guild: target_message.guild.id, //the id of the guild
+        timestamp: target_message.createdTimestamp.toString() //the timestamp of the message (idk if we need this, but just in case)
     };
 
-    // axios post
+    // axios post - make a post request to the API with the data
     await axios.post(url, data).then(res => {
         if (res.status == 200) {
             message.reply('Message classified successfully!');
@@ -84,12 +84,14 @@ async function execute(message) {
     // update the categories discord category
     let discord_category = process.env.NOTES_CATEGORY_ID;
  
+    // get the discord category channel (the channel where the categories are)
     let discord_category_channel = await message.guild.channels.fetch(discord_category).catch(err => {
         return message.reply("I couldn't find that category. Please provide a valid category ID.");
     });
 
    
 
+    //get the current existing categories in the spreadsheet from the API and delete any channels that are not in the categories
     let category_url = process.env.API_URL + '/categories/' + message.guild.id;
     await axios.get(category_url).then(res => {
         //delete any channels that are not in the categories
@@ -105,7 +107,7 @@ async function execute(message) {
             }
         });
 
-        //create channels for each category
+        //create channels for each category if they do not exist
         channels = discord_category_channel.children;
         channels = channels.cache.map(channel => channel.name);
         categories.forEach(category => {
@@ -130,7 +132,7 @@ async function execute(message) {
     await new Promise(resolve => setTimeout(resolve, 5000));
 
 
-    //send message to category channel
+    //send copied message to category channel
     discord_category_channel = await message.guild.channels.fetch(discord_category)
     let category_channel = discord_category_channel.children.cache.find(channel => channel.name === category);
     if (category_channel) {

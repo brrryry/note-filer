@@ -8,7 +8,7 @@ const data = new SlashCommandBuilder()
 
 // Command execution function.
 async function execute(message) {
-  await message.reply('Pong.');
+  await message.reply('Pong.'); //just reply to the message with pong.
   return;
 }
 
