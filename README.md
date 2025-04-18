@@ -41,7 +41,7 @@ python -m venv .venv
 ```
 Activate your environment (for Windows):
 ```
-./.venv/bin/Activate
+./.venv/Scripts/Activate
 ```
 Activate your environment (for Linux):
 ```
