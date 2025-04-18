@@ -45,6 +45,7 @@ async function execute(message) {
             message.reply("I couldn't find that message. Please provide a valid message ID.");
         })
         if(!target_message) return;
+        console.log(target_message)
     }
 
     if (category == null || target_message == null) {
@@ -62,7 +63,7 @@ async function execute(message) {
     let data = {
         message: target_message.content,
         category: category,
-        user: target_message.member.id,
+        user: target_message.author.id,
         guild: target_message.guild.id,
         timestamp: target_message.createdTimestamp.toString()
     };
