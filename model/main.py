@@ -51,6 +51,18 @@ def mark_message():
     df.to_csv(f"{os.getenv('DATA_FOLDER')}/{guild}.csv", index=False)
     return jsonify({"message": "Message marked successfully", "categories": num_categories(df), "newcategory": num_categories(df) > current_categories}), 200
 
+@app.route("/predict", methods=["POST"])
+def model_predict():
+    data = request.get_json()
+
+    # get req body data
+    message = data.get("message")
+    guild = data.get("guild")
+    user = data.get("user")
+    timestamp = data.get("timestamp")
+
+    # TODO: given the message, predict the category using the server's model
+
 
 # this is a test endpoint to get the number of categories in the dataframe
 @app.route("/categories/<guild>", methods=["GET"])
@@ -65,6 +77,16 @@ def categories(guild):
     if len(categories) == 0: return jsonify({"error": "No categories found"}), 404 # again, should not happen
 
     return jsonify({"categories": categories}), 200
+
+@app.route("/train/<guild>", methods=["POST"])
+def train_model(guild):
+    if not os.path.exists(f"{os.getenv('DATA_FOLDER')}/{guild}.csv"): return jsonify({"error": "Guild not found"}), 404
+    df = pd.read_csv(f"{os.getenv('DATA_FOLDER')}/{guild}.csv")
+    categories = get_categories(df)
+
+    return jsonify({"id": guild, "num_categories": len(categories)}), 200 
+
+    # TODO: create a model and train it on the data here!
 
 
 # this is a test endpoint.
