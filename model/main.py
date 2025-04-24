@@ -93,3 +93,150 @@ def train_model(guild):
 @app.route("/")
 def hello_world():
     return "Hello, World!"
+
+def train(guild_id, model_save_path=None, test_size=0.2, random_state=42):
+    """
+    Train an NLP model to categorize messages into user-defined categories for a specific guild.
+    
+    Parameters:
+    -----------
+    guild_id : str
+        The ID of the guild/server to train the model for
+    
+    model_save_path : str, optional
+        Path where the trained model will be saved. If None, will use DATA_FOLDER/guild_id_model
+    
+    test_size : float
+        Proportion of the dataset to be used as test set (default: 0.2)
+    
+    random_state : int
+        Random seed for reproducible results
+        
+    Returns:
+    --------
+    model : trained model object
+        The trained classification model
+    accuracy : float
+        Accuracy score on the test set
+    """
+    import os
+    import pandas as pd
+    import numpy as np
+    from sklearn.model_selection import train_test_split
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.pipeline import Pipeline
+    from sklearn.multiclass import OneVsRestClassifier
+    from sklearn.svm import LinearSVC
+    from sklearn.metrics import accuracy_score
+    
+    # Set default model save path if not provided
+    if model_save_path is None:
+        model_save_path = f"{os.getenv('DATA_FOLDER')}/{guild_id}_model"
+    
+    # Check if data file exists
+    data_file = f"{os.getenv('DATA_FOLDER')}/{guild_id}.csv"
+    if not os.path.exists(data_file):
+        raise FileNotFoundError(f"No training data found for guild {guild_id}")
+    
+    # Load the data
+    df = pd.read_csv(data_file)
+    
+    # Check if we have enough data
+    categories = get_categories(df)
+    if len(categories) < 2:
+        raise ValueError("Need at least 2 categories to train a model")
+    
+    if len(df) < 10:
+        raise ValueError("Need at least 10 messages to train a model")
+    
+    # Prepare features and target
+    X = df['message'].values
+    y = df['category'].values
+    
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y if len(df) > 20 else None
+    )
+    
+    # Create label encoder
+    label_encoder = LabelEncoder()
+    label_encoder.fit(categories)
+    
+    # Transform the target
+    y_train_encoded = label_encoder.transform(y_train)
+    y_test_encoded = label_encoder.transform(y_test)
+    
+    # Create and train the pipeline
+    pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(min_df=2, max_df=0.95, ngram_range=(1, 2))),
+        ('classifier', OneVsRestClassifier(LinearSVC(random_state=random_state)))
+    ])
+    
+    pipeline.fit(X_train, y_train_encoded)
+    
+    # Evaluate the model
+    y_pred = pipeline.predict(X_test)
+    accuracy = accuracy_score(y_test_encoded, y_pred)
+    
+    # Save the model and label encoder
+    import joblib
+    os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
+    joblib.dump((pipeline, label_encoder), model_save_path)
+    
+    print(f"Model trained for guild {guild_id} with accuracy: {accuracy:.2f}")
+    
+    return pipeline, accuracy
+
+def predict_category(message, guild_id):
+    """
+    Predict the category of a message using the trained model for a specific guild.
+    
+    Parameters:
+    -----------
+    message : str
+        The message to categorize
+    
+    guild_id : str
+        The ID of the guild/server
+        
+    Returns:
+    --------
+    predicted_category : str
+        The predicted category for the message
+    confidence : float
+        Confidence score for the prediction (if available)
+
+    #paramrters input a string, output max(categories)
+    #need ID for correct server DATA_FOLDER/ID.csv
+    #pretrain for weights, not meant to be unsupervised
+    #this is for supervision with test data
+    Categories = file.read(/data)
+    #interpet the names of the ategoies
+    """
+    import os
+    import joblib
+    
+    model_path = f"{os.getenv('DATA_FOLDER')}/{guild_id}_model"
+    
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"No trained model found for guild {guild_id}. Run train({guild_id}) first.")
+    
+    # Load the model and label encoder
+    pipeline, label_encoder = joblib.load(model_path)
+    
+    # Make prediction
+    prediction = pipeline.predict([message])[0]
+    
+    # Get predicted category name
+    predicted_category = label_encoder.inverse_transform([prediction])[0]
+    
+    # Try to get confidence scores if the model supports it
+    try:
+        # Get confidence scores
+        confidence_scores = pipeline.decision_function([message])[0]
+        confidence = confidence_scores[prediction]
+    except:
+        confidence = None
+    
+    return predicted_category, confidence
