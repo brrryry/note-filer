@@ -1,0 +1,464 @@
+import os
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import LabelEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import LinearSVC
+from sklearn.metrics import accuracy_score, classification_report
+import joblib
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+
+# Set the data folder path
+DATA_FOLDER = "data"
+
+# Create data directory if it doesn't exist
+os.makedirs(DATA_FOLDER, exist_ok=True)
+
+def create_test_data():
+    """
+    Create example test data and save it as a CSV file.
+    """
+    test_data = [
+        ["I got a new badminton racket and it's amazing!", "badminton", "323297551887368204", "1354533600745361809", "1744939103027"],
+        ["When is the next badminton tournament?", "badminton", "302923939154493441", "1354533600745361809", "1744939336172"],
+        ["Does anyone want to play badminton this weekend?", "badminton", "323297551887368204", "1354533600745361809", "1744939676212"],
+        ["The shuttle was out of bounds in that last game", "badminton", "446721983437619245", "1354533600745361809", "1744939780845"],
+        ["I need to improve my backhand stroke", "badminton", "302923939154493441", "1354533600745361809", "1744939890321"],
+        ["Did you see that amazing smash during the Olympics?", "badminton", "323297551887368204", "1354533600745361809", "1744940001245"],
+        ["The new moon looks beautiful tonight", "astronomy", "323297551887368204", "1354533600745361809", "1744940123456"],
+        ["I spotted Saturn through my telescope", "astronomy", "302923939154493441", "1354533600745361809", "1744940234567"],
+        ["The lunar eclipse will be visible next Tuesday", "astronomy", "446721983437619245", "1354533600745361809", "1744940345678"],
+        ["Has anyone seen the meteor shower last night?", "astronomy", "323297551887368204", "1354533600745361809", "1744940456789"],
+        ["The International Space Station just passed over my house", "astronomy", "302923939154493441", "1354533600745361809", "1744940567890"],
+        ["I'm looking for a new gaming headset", "gaming", "446721983437619245", "1354533600745361809", "1744940678901"],
+        ["Has anyone played the new Elder Scrolls game?", "gaming", "323297551887368204", "1354533600745361809", "1744940789012"],
+        ["My ping is terrible today", "gaming", "302923939154493441", "1354533600745361809", "1744940890123"],
+        ["I just built a new gaming PC with RTX 4080", "gaming", "446721983437619245", "1354533600745361809", "1744941001234"],
+        ["Does anyone have recommendations for good RPGs?", "gaming", "323297551887368204", "1354533600745361809", "1744941112345"],
+        ["I made a beef Wellington for dinner", "cooking", "302923939154493441", "1354533600745361809", "1744941223456"],
+        ["What's the best way to cook risotto?", "cooking", "446721983437619245", "1354533600745361809", "1744941334567"],
+        ["I'm trying to perfect my sourdough bread recipe", "cooking", "323297551887368204", "1354533600745361809", "1744941445678"],
+        ["Does anyone have a good recipe for chocolate cake?", "cooking", "302923939154493441", "1354533600745361809", "1744941556789"],
+        ["My new cast iron pan is amazing", "cooking", "446721983437619245", "1354533600745361809", "1744941667890"],
+        ["I'm going hiking in the mountains this weekend", "outdoors", "323297551887368204", "1354533600745361809", "1744941778901"],
+        ["Has anyone tried the new hiking trail by the lake?", "outdoors", "302923939154493441", "1354533600745361809", "1744941889012"],
+        ["I saw a deer in the park this morning", "outdoors", "446721983437619245", "1354533600745361809", "1744942000123"],
+        ["What's the best tent for camping in the rain?", "outdoors", "323297551887368204", "1354533600745361809", "1744942111234"],
+        ["I caught a huge fish on my trip last weekend", "outdoors", "302923939154493441", "1354533600745361809", "1744942222345"],
+        ["The new JavaScript framework looks promising", "programming", "446721983437619245", "1354533600745361809", "1744942333456"],
+        ["I can't figure out this bug in my Python code", "programming", "323297551887368204", "1354533600745361809", "1744942444567"],
+        ["Does anyone know how to optimize this SQL query?", "programming", "302923939154493441", "1354533600745361809", "1744942555678"],
+        ["I just deployed my first React app", "programming", "446721983437619245", "1354533600745361809", "1744942666789"],
+        ["Git merge conflicts are driving me crazy today", "programming", "323297551887368204", "1354533600745361809", "1744942777890"],
+        ["The concert last night was amazing", "music", "302923939154493441", "1354533600745361809", "1744942888901"],
+        ["I'm learning to play the guitar", "music", "446721983437619245", "1354533600745361809", "1744943000012"],
+        ["Has anyone heard the new album by Taylor Swift?", "music", "323297551887368204", "1354533600745361809", "1744943111123"],
+        ["I'm going to a jazz festival next month", "music", "302923939154493441", "1354533600745361809", "1744943222234"],
+        ["What's your favorite music genre?", "music", "446721983437619245", "1354533600745361809", "1744943333345"]
+    ]
+    
+    df = pd.DataFrame(test_data, columns=["message", "category", "user", "guild", "timestamp"])
+    
+    # Create the data directory if it doesn't exist
+    guild_id = "1354533600745361809"
+    df.to_csv(f"{DATA_FOLDER}/{guild_id}.csv", index=False)
+    
+    print(f"Test data created and saved to {DATA_FOLDER}/{guild_id}.csv")
+    
+    return df
+
+def get_categories(df):
+    """
+    Get unique categories from the dataframe.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Dataframe containing message data
+        
+    Returns:
+    --------
+    list
+        List of unique categories
+    """
+    return df['category'].unique().tolist()
+
+def num_categories(df):
+    """
+    Get the number of unique categories in the dataframe.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Dataframe containing message data
+        
+    Returns:
+    --------
+    int
+        Number of unique categories
+    """
+    return len(get_categories(df))
+
+def train(guild_id, model_save_path=None, test_size=0.2, random_state=42):
+    """
+    Train an NLP model to categorize messages into user-defined categories for a specific guild.
+    
+    Parameters:
+    -----------
+    guild_id : str
+        The ID of the guild/server to train the model for
+    
+    model_save_path : str, optional
+        Path where the trained model will be saved. If None, will use DATA_FOLDER/guild_id_model
+    
+    test_size : float
+        Proportion of the dataset to be used as test set (default: 0.2)
+    
+    random_state : int
+        Random seed for reproducible results
+        
+    Returns:
+    --------
+    model : trained model object
+        The trained classification model
+    accuracy : float
+        Accuracy score on the test set
+    test_data : tuple
+        Tuple containing (X_test, y_test) for further evaluation
+    """
+    # Set default model save path if not provided
+    if model_save_path is None:
+        model_save_path = f"{DATA_FOLDER}/{guild_id}_model.pkl"
+    
+    # Check if data file exists
+    data_file = f"{DATA_FOLDER}/{guild_id}.csv"
+    if not os.path.exists(data_file):
+        raise FileNotFoundError(f"No training data found for guild {guild_id}")
+    
+    # Load the data
+    df = pd.read_csv(data_file)
+    
+    # Check if we have enough data
+    categories = get_categories(df)
+    if len(categories) < 2:
+        raise ValueError("Need at least 2 categories to train a model")
+    
+    if len(df) < 10:
+        raise ValueError("Need at least 10 messages to train a model")
+    
+    print(f"Training model with {len(df)} messages across {len(categories)} categories")
+    
+    # Prepare features and target
+    X = df['message'].values
+    y = df['category'].values
+    
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y if len(df) > 20 else None
+    )
+    
+    # Create label encoder
+    label_encoder = LabelEncoder()
+    label_encoder.fit(categories)
+    
+    # Transform the target
+    y_train_encoded = label_encoder.transform(y_train)
+    y_test_encoded = label_encoder.transform(y_test)
+    
+    # Create and train the pipeline
+    pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(min_df=1, max_df=0.95, ngram_range=(1, 2))),
+        ('classifier', OneVsRestClassifier(LinearSVC(random_state=random_state)))
+    ])
+    
+    pipeline.fit(X_train, y_train_encoded)
+    
+    # Evaluate the model
+    y_pred = pipeline.predict(X_test)
+    accuracy = accuracy_score(y_test_encoded, y_pred)
+    
+    # Print classification report
+    print("Classification Report:")
+    print(classification_report(y_test_encoded, y_pred, target_names=label_encoder.classes_))
+    
+    # Save the model and label encoder
+    os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
+    joblib.dump((pipeline, label_encoder), model_save_path)
+    
+    print(f"Model trained for guild {guild_id} with accuracy: {accuracy:.2f}")
+    print(f"Model saved to {model_save_path}")
+    
+    return pipeline, label_encoder, accuracy, (X_test, y_test_encoded)
+
+def predict_category(message, guild_id):
+    """
+    Predict the category of a message using the trained model for a specific guild.
+    
+    Parameters:
+    -----------
+    message : str
+        The message to categorize
+    
+    guild_id : str
+        The ID of the guild/server
+        
+    Returns:
+    --------
+    predicted_category : str
+        The predicted category for the message
+    confidence : float or None
+        Confidence score for the prediction (if available)
+    """
+    model_path = f"{DATA_FOLDER}/{guild_id}_model.pkl"
+    
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"No trained model found for guild {guild_id}. Run train({guild_id}) first.")
+    
+    # Load the model and label encoder
+    pipeline, label_encoder = joblib.load(model_path)
+    
+    # Make prediction
+    prediction = pipeline.predict([message])[0]
+    
+    # Get predicted category name
+    predicted_category = label_encoder.inverse_transform([prediction])[0]
+    
+    # Try to get confidence scores if the model supports it
+    try:
+        # Get confidence scores
+        confidence_scores = pipeline.decision_function([message])[0]
+        max_idx = np.argmax(confidence_scores)
+        confidence = confidence_scores[max_idx]
+    except:
+        confidence = None
+    
+    return predicted_category, confidence
+
+def visualize_confusion_matrix(y_true, y_pred, class_names):
+    """
+    Visualize the confusion matrix for model evaluation.
+    
+    Parameters:
+    -----------
+    y_true : array-like
+        True labels
+    
+    y_pred : array-like
+        Predicted labels
+        
+    class_names : list
+        List of class names
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+    plt.savefig(f"{DATA_FOLDER}/confusion_matrix.png")
+    plt.close()
+    print(f"Confusion matrix saved to {DATA_FOLDER}/confusion_matrix.png")
+
+def test_model_with_new_messages(guild_id, pipeline=None, label_encoder=None):
+    """
+    Test the model with some new, unseen messages.
+    
+    Parameters:
+    -----------
+    guild_id : str
+        The ID of the guild/server to test the model for
+        
+    pipeline : Pipeline, optional
+        The trained model pipeline
+        
+    label_encoder : LabelEncoder, optional
+        The label encoder used during training
+    """
+    if pipeline is None or label_encoder is None:
+        model_path = f"{DATA_FOLDER}/{guild_id}_model.pkl"
+        pipeline, label_encoder = joblib.load(model_path)
+    
+    # Test messages that were not in the training set
+    test_messages = [
+        "I just got destroyed in my badminton match today",
+        "The stars are so clear tonight",
+        "I need help picking a new GPU for my PC",
+        "How do you make a perfect pizza crust?",
+        "I'm planning a camping trip next week",
+        "I'm learning Rust programming language",
+        "This band's new album is fire!"
+    ]
+    
+    print("\nTesting model with new messages:")
+    for message in test_messages:
+        prediction = pipeline.predict([message])[0]
+        predicted_category = label_encoder.inverse_transform([prediction])[0]
+        
+        # Get confidence scores if available
+        try:
+            decision_values = pipeline.decision_function([message])[0]
+            # Normalize decision values to get a kind of confidence score
+            # This is a common way to convert SVM decision values to confidence
+            all_categories = np.arange(len(label_encoder.classes_))
+            scores = {}
+            
+            # Get all scores and normalize them
+            max_val = np.max(np.abs(decision_values))
+            if max_val > 0:
+                normalized_scores = (decision_values + max_val) / (2 * max_val)
+            else:
+                normalized_scores = np.ones_like(decision_values) / len(decision_values)
+                
+            for i, category in enumerate(label_encoder.classes_):
+                scores[category] = normalized_scores[i]
+            
+            # Print all scores
+            print(f"Message: '{message}'")
+            print(f"Predicted category: {predicted_category}")
+            print("Category confidence scores:")
+            for category, score in sorted(scores.items(), key=lambda x: x[1], reverse=True):
+                print(f"  - {category}: {score:.4f}")
+        except Exception as e:
+            print(f"Message: '{message}'")
+            print(f"Predicted category: {predicted_category}")
+            print(f"Error getting confidence scores: {e}")
+        print("-" * 50)
+
+def add_example(message, category, guild_id, user_id="123456789", timestamp=None):
+    """
+    Add a new example to the training data.
+    
+    Parameters:
+    -----------
+    message : str
+        The message to add
+        
+    category : str
+        The category of the message
+        
+    guild_id : str
+        The ID of the guild/server
+        
+    user_id : str, optional
+        The ID of the user
+        
+    timestamp : str, optional
+        The timestamp of the message
+        
+    Returns:
+    --------
+    bool
+        True if the example was added successfully
+    """
+    import time
+    
+    if timestamp is None:
+        timestamp = str(int(time.time() * 1000))
+    
+    data_file = f"{DATA_FOLDER}/{guild_id}.csv"
+    
+    if not os.path.exists(data_file):
+        # Create a new dataframe with the example
+        df = pd.DataFrame({
+            "message": [message],
+            "category": [category],
+            "user": [user_id],
+            "guild": [guild_id],
+            "timestamp": [timestamp]
+        })
+    else:
+        # Load existing data and append the new example
+        df = pd.read_csv(data_file)
+        df.loc[len(df)] = [message, category, user_id, guild_id, timestamp]
+    
+    # Save the updated data
+    df.to_csv(data_file, index=False)
+    
+    print(f"Added new example to {data_file}")
+    print(f"Message: '{message}'")
+    print(f"Category: {category}")
+    
+    return True
+
+def simulate_live_categorization():
+    """
+    Simulate live categorization of messages.
+    This simulates the Discord bot's actual operation.
+    """
+    guild_id = "1354533600745361809"
+    
+    # Make sure model is trained
+    model_path = f"{DATA_FOLDER}/{guild_id}_model.pkl"
+    if not os.path.exists(model_path):
+        print("Model not found. Training...")
+        train(guild_id)
+    
+    print("\n===== DISCORD BOT CATEGORY PREDICTION SIMULATOR =====")
+    print("Type 'exit' to quit, 'train' to retrain the model, 'add' to add an example")
+    
+    while True:
+        user_input = input("\nEnter a message to categorize: ")
+        
+        if user_input.lower() == 'exit':
+            break
+        elif user_input.lower() == 'train':
+            train(guild_id)
+            continue
+        elif user_input.lower() == 'add':
+            message = input("Enter the message: ")
+            category = input("Enter the category: ")
+            add_example(message, category, guild_id)
+            continue
+        
+        # Predict category
+        try:
+            category, confidence = predict_category(user_input, guild_id)
+            print(f"Predicted category: {category}")
+            
+            # Ask if prediction was correct
+            feedback = input("Is this prediction correct? (y/n): ")
+            if feedback.lower() == 'n':
+                correct_category = input("What is the correct category? ")
+                add_example(user_input, correct_category, guild_id)
+                retrain = input("Would you like to retrain the model now? (y/n): ")
+                if retrain.lower() == 'y':
+                    train(guild_id)
+        except Exception as e:
+            print(f"Error: {e}")
+
+def main():
+    """
+    Main function to demonstrate the complete workflow.
+    """
+    guild_id = "1354533600745361809"
+    
+    # Create test data if it doesn't exist
+    if not os.path.exists(f"{DATA_FOLDER}/{guild_id}.csv"):
+        print("Creating test data...")
+        create_test_data()
+    else:
+        print(f"Using existing test data from {DATA_FOLDER}/{guild_id}.csv")
+    
+    # Train the model
+    print("\nTraining model...")
+    pipeline, label_encoder, accuracy, test_data = train(guild_id)
+    
+    # Visualize confusion matrix
+    X_test, y_test = test_data
+    y_pred = pipeline.predict(X_test)
+    visualize_confusion_matrix(y_test, y_pred, label_encoder.classes_)
+    
+    # Test with new messages
+    test_model_with_new_messages(guild_id, pipeline, label_encoder)
+    
+    # Simulate live categorization
+    simulate_live_categorization()
+
+if __name__ == "__main__":
+    main()
