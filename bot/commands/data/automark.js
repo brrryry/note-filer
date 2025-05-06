@@ -57,7 +57,7 @@ async function execute(message) {
     targetCategory = ""
     await axios.post(url, data).then(res => {
         if (res.status == 200) {
-            message.reply('Message classified successfully!');
+            message.reply(`Message classified successfully! (Category ${res.data.category} with confidence ${res.data.confidence})`);
             targetCategory = res.data.category;
         } else if (res.status == 400) {
             return message.reply(res.data);
@@ -66,10 +66,10 @@ async function execute(message) {
         }
     }).catch(err => {
         console.log(err);
-        message.reply('Error classifying message: ' + err.response.data.error ? err.response.data.error : err.message);
+        return message.reply('Error classifying message: ' + err.response?.data?.error ? err.response.data.error : err.message);
     });
 
-    if (!targetCategory) return message.reply("Error: No category found for this message.");
+    if (!targetCategory) return;
 
 
     // update the categories discord category
@@ -127,7 +127,7 @@ async function execute(message) {
     discord_category_channel = await message.guild.channels.fetch(discord_category)
     let category_channel = discord_category_channel.children.cache.find(channel => channel.name === targetCategory);
     if (category_channel) {
-        category_channel.send(`Marked by <@!${message.member.id}>\nMessage source: ${target_message.url}\n\n${target_message.content}`);
+        category_channel.send(`AUTOMATICALLY Marked by <@!${message.member.id}>\nMessage source: ${target_message.url}\n\n${target_message.content}`);
     } else {
         message.channel.send('Error: Category channel not found.');
     }
