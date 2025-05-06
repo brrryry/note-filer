@@ -55,6 +55,7 @@ import pickle
 import re
 import time
 import random
+import pathlib
 
 # Ensure TensorFlow reproducibility
 def set_seed(seed_value=42):
@@ -1163,8 +1164,8 @@ def train_cross_validation(guild_id):
     Train a highly accurate model using cross-validation to ensure robustness
     """
     # Guild ID for the dataset
-    model_save_path = f"{DATA_FOLDER}/{guild_id}_model"
-    os.makedirs(model_save_path, exist_ok=True)
+    model_save_path = f"{DATA_FOLDER}/{guild_id}"
+    pathlib.Path(model_save_path).mkdir(parents=True, exist_ok=True)
     
     # Check if data file exists
     data_file = f"{DATA_FOLDER}/{guild_id}.csv"
