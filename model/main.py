@@ -4,7 +4,7 @@ import pandas as pd
 from data import num_categories, get_categories
 import os
 import threading
-from model import predict_category, train
+from model import predict_category, train, train_cross_validation, TextCategoryPredictor
 
 #import tensorflow as tf
 #from tensorflow import keras
@@ -75,12 +75,15 @@ def model_predict():
     if not isinstance(timestamp, str): return jsonify({"error": "Timestamp must be a string"}), 400
 
     predicted_category, confidence = predict_category(message, guild)
+
+    if predicted_category is None: return jsonify({"error": "Model not trained yet"}), 400
+
     print(predicted_category, confidence)
 
     if predicted_category is None: return jsonify({"error": "Model not trained yet"}), 400
     if confidence <= 0: return jsonify({"error": "Model not confident enough"}), 400
 
-    return jsonify({"category": predicted_category, "confidence": confidence}), 200
+    return jsonify({"category": predicted_category, "confidence": float(confidence)}), 200
 
 
 
@@ -107,7 +110,10 @@ def train_model(guild):
     training_task = threading.Thread(target=train, args=(guild,))
     training_task.start()
 
-    return jsonify({"message": "Model training started"}), 200
+    training_task2 = threading.Thread(target=train_cross_validation, args=(guild,))
+    training_task2.start()
+
+    return jsonify({"message": "Model training started", "num_categories": len(get_categories(df))}), 200
     
 
 # this is a test endpoint.

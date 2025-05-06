@@ -80,6 +80,64 @@ try:
 except:
     print("NLTK resources already downloaded or could not be downloaded")
 
+# Create a standalone predictor class
+class TextCategoryPredictor:
+    def __init__(self, models, tokenizer, label_encoder, max_sequence_length):
+        self.models = models
+        self.tokenizer = tokenizer
+        self.label_encoder = label_encoder
+        self.max_sequence_length = max_sequence_length
+    
+    def preprocess_text(self, text):
+        """Apply same preprocessing used during training"""
+        return text_preprocessing(text)
+    
+    def predict(self, messages, return_confidence=False):
+        """
+        Predict categories for a list of messages
+        
+        Args:
+            messages: List of text messages to classify
+            return_confidence: Whether to return confidence scores
+            
+        Returns:
+            Predicted categories, and optionally confidence scores
+        """
+        # Preprocess messages
+        preprocessed = [self.preprocess_text(msg) for msg in messages]
+        
+        # Convert to sequences
+        sequences = self.tokenizer.texts_to_sequences(preprocessed)
+        
+        # Pad sequences
+        padded = pad_sequences(sequences, maxlen=self.max_sequence_length, padding='post')
+        
+        # Get predictions from all models
+        all_predictions = []
+        for model in self.models:
+            preds = model.predict(padded)
+            all_predictions.append(preds)
+        
+        # Compute ensemble predictions with weighted average
+        weights = [1.2, 1.0, 0.8]  # Assign more weight to better models
+        weighted_preds = []
+        
+        for i, preds in enumerate(all_predictions):
+            weight = weights[i] if i < len(weights) else 1.0
+            weighted_preds.append(preds * weight)
+        
+        # Average predictions
+        ensemble_preds = np.sum(weighted_preds, axis=0) / np.sum(weights[:len(all_predictions)])
+        
+        # Get classes and confidences
+        pred_classes = np.argmax(ensemble_preds, axis=1)
+        pred_categories = self.label_encoder.inverse_transform(pred_classes)
+        confidences = np.max(ensemble_preds, axis=1)
+        
+        if return_confidence:
+            return pred_categories, confidences
+        return pred_categories
+
 def create_test_csv():
     """Create a CSV file with expanded test data for training the model."""
     guild_id = "1354533600745361809"
@@ -1100,12 +1158,11 @@ def ensemble_predict(models, X_test):
     ensemble_pred = np.sum(weighted_predictions, axis=0) / np.sum(weights[:len(predictions)])
     return ensemble_pred
 
-def train_cross_validation():
+def train_cross_validation(guild_id):
     """
     Train a highly accurate model using cross-validation to ensure robustness
     """
     # Guild ID for the dataset
-    guild_id = "1354533600745361809"
     model_save_path = f"{DATA_FOLDER}/{guild_id}_model"
     os.makedirs(model_save_path, exist_ok=True)
     
@@ -1500,64 +1557,6 @@ def train_cross_validation():
         print(f"Confidence: {confidence:.4f}")
         print()
     
-    # Create a standalone predictor class
-    class TextCategoryPredictor:
-        def __init__(self, models, tokenizer, label_encoder, max_sequence_length):
-            self.models = models
-            self.tokenizer = tokenizer
-            self.label_encoder = label_encoder
-            self.max_sequence_length = max_sequence_length
-        
-        def preprocess_text(self, text):
-            """Apply the same preprocessing used during training"""
-            return text_preprocessing(text)
-        
-        def predict(self, messages, return_confidence=False):
-            """
-            Predict categories for a list of messages
-            
-            Args:
-                messages: List of text messages to classify
-                return_confidence: Whether to return confidence scores
-                
-            Returns:
-                Predicted categories, and optionally confidence scores
-            """
-            # Preprocess messages
-            preprocessed = [self.preprocess_text(msg) for msg in messages]
-            
-            # Convert to sequences
-            sequences = self.tokenizer.texts_to_sequences(preprocessed)
-            
-            # Pad sequences
-            padded = pad_sequences(sequences, maxlen=self.max_sequence_length, padding='post')
-            
-            # Get predictions from all models
-            all_predictions = []
-            for model in self.models:
-                preds = model.predict(padded)
-                all_predictions.append(preds)
-            
-            # Compute ensemble predictions with weighted average
-            weights = [1.2, 1.0, 0.8]  # Assign more weight to better models
-            weighted_preds = []
-            
-            for i, preds in enumerate(all_predictions):
-                weight = weights[i] if i < len(weights) else 1.0
-                weighted_preds.append(preds * weight)
-            
-            # Average predictions
-            ensemble_preds = np.sum(weighted_preds, axis=0) / np.sum(weights[:len(all_predictions)])
-            
-            # Get classes and confidences
-            pred_classes = np.argmax(ensemble_preds, axis=1)
-            pred_categories = self.label_encoder.inverse_transform(pred_classes)
-            confidences = np.max(ensemble_preds, axis=1)
-            
-            if return_confidence:
-                return pred_categories, confidences
-            return pred_categories
-    
     # Create and save the predictor
     predictor = TextCategoryPredictor(
         ensemble_models, tokenizer, label_encoder, max_sequence_length
@@ -1685,7 +1684,7 @@ def train(guild_id, model_save_path=None, test_size=0.2, random_state=42, epochs
     
     # Tokenize text
     max_words = 10000  # Maximum vocab size
-    max_sequence_length = 100  # Max length of each message
+    max_sequence_length = 80  # Max length of each message
     
     tokenizer = Tokenizer(num_words=max_words, oov_token="<OOV>")
     tokenizer.fit_on_texts(X_train)
@@ -1782,6 +1781,7 @@ def train(guild_id, model_save_path=None, test_size=0.2, random_state=42, epochs
     print(f"Model saved to {model_save_path}")
     return model, accuracy
 
+
 def predict_category(message, guild_id):
     """
     Predict the category of a message using the trained model for a specific guild.
@@ -1801,13 +1801,15 @@ def predict_category(message, guild_id):
     confidence : float
         Confidence score for the prediction
     """
-    model_path = f"{DATA_FOLDER}/{guild_id}_model"
+    model_path = f"{os.getenv('DATA_FOLDER')}/{guild_id}_model"
     
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"No trained model found for guild {guild_id}. Run train({guild_id}) first.")
     
     # Load the model, tokenizer, and label encoder
-    model = load_model(f"{model_path}/keras_model")
+    if not os.path.exists(f"{model_path}/best_model.keras"): return None, None
+
+    model = load_model(f"{os.path.abspath(model_path)}/best_model.keras")
     
     with open(f"{model_path}/tokenizer.pickle", 'rb') as handle:
         tokenizer = pickle.load(handle)
@@ -1816,7 +1818,7 @@ def predict_category(message, guild_id):
         label_encoder = pickle.load(handle)
     
     # Prepare the message
-    max_sequence_length = 100
+    max_sequence_length = 80
     sequences = tokenizer.texts_to_sequences([message])
     padded = pad_sequences(sequences, maxlen=max_sequence_length, padding='post')
     
@@ -1831,6 +1833,7 @@ def predict_category(message, guild_id):
     predicted_category = label_encoder.inverse_transform([predicted_class_index])[0]
     
     return predicted_category, confidence
+
 
 def train(guild_id, model_save_path=None, test_size=0.2, random_state=42):
     """
@@ -1925,56 +1928,3 @@ def train(guild_id, model_save_path=None, test_size=0.2, random_state=42):
     print(f"Model trained for guild {guild_id} with accuracy: {accuracy:.2f}")
     
     return pipeline, accuracy
-
-def predict_category(message, guild_id):
-    """
-    Predict the category of a message using the trained model for a specific guild.
-    
-    Parameters:
-    -----------
-    message : str
-        The message to categorize
-    
-    guild_id : str
-        The ID of the guild/server
-        
-    Returns:
-    --------
-    predicted_category : str
-        The predicted category for the message
-    confidence : float
-        Confidence score for the prediction (if available)
-
-    #paramrters input a string, output max(categories)
-    #need ID for correct server DATA_FOLDER/ID.csv
-    #pretrain for weights, not meant to be unsupervised
-    #this is for supervision with test data
-    Categories = file.read(/data)
-    #interpet the names of the ategoies
-    """
-    import os
-    import joblib
-    
-    model_path = f"{os.getenv('DATA_FOLDER')}/{guild_id}_model"
-    
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"No trained model found for guild {guild_id}. Run train({guild_id}) first.")
-    
-    # Load the model and label encoder
-    pipeline, label_encoder = joblib.load(model_path)
-    
-    # Make prediction
-    prediction = pipeline.predict([message])[0]
-    
-    # Get predicted category name
-    predicted_category = label_encoder.inverse_transform([prediction])[0]
-    
-    # Try to get confidence scores if the model supports it
-    try:
-        # Get confidence scores
-        confidence_scores = pipeline.decision_function([message])[0]
-        confidence = confidence_scores[prediction]
-    except:
-        confidence = None
-    
-    return predicted_category, confidence
