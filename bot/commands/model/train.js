@@ -20,8 +20,6 @@ async function execute(message) {
             message.reply("Error: " + res.data);
         }
     })
-
-
 }
 
 module.exports = {

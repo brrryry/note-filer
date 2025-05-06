@@ -3,6 +3,7 @@ from dotenv import load_dotenv # type: ignore
 import pandas as pd
 from data import num_categories, get_categories
 import os
+import threading
 
 #import tensorflow as tf
 #from tensorflow import keras
@@ -61,7 +62,24 @@ def model_predict():
     user = data.get("user")
     timestamp = data.get("timestamp")
 
-    # TODO: given the message, predict the category using the server's model
+    # error checking - just checking if anything in the body is missing or not a string.
+    if not message: return jsonify({"error": "Message is required"}), 400
+    if not guild: return jsonify({"error": "Guild is required"}), 400
+    if not user: return jsonify({"error": "User is required"}), 400
+    if not timestamp: return jsonify({"error": "Timestamp is required"}), 400
+
+    if not isinstance(message, str): return jsonify({"error": "Message must be a string"}), 400
+    if not isinstance(guild, str): return jsonify({"error": "Guild must be a string"}), 400
+    if not isinstance(user, str): return jsonify({"error": "User must be a string"}), 400
+    if not isinstance(timestamp, str): return jsonify({"error": "Timestamp must be a string"}), 400
+
+    predicted_category, confidence = predict_category(message, guild)
+
+    if predicted_category is None: return jsonify({"error": "Model not trained yet"}), 400
+    if confidence < 0.2: return jsonify({"error": "Model not confident enough"}), 400
+
+    return jsonify({"category": predicted_category, "confidence": confidence}), 200
+
 
 
 # this is a test endpoint to get the number of categories in the dataframe
@@ -82,11 +100,16 @@ def categories(guild):
 def train_model(guild):
     if not os.path.exists(f"{os.getenv('DATA_FOLDER')}/{guild}.csv"): return jsonify({"error": "Guild not found"}), 404
     df = pd.read_csv(f"{os.getenv('DATA_FOLDER')}/{guild}.csv")
-    categories = get_categories(df)
 
-    return jsonify({"id": guild, "num_categories": len(categories)}), 200 
+    """ to be implemented once model is ready
 
-    # TODO: create a model and train it on the data here!
+    training_task = threading.Thread(target=train_model, args=(df,))
+    training_task.start()
+
+    return jsonify({"message": "Model training started"}), 200
+    """
+    
+
 
 
 # this is a test endpoint.
@@ -922,6 +945,7 @@ def predict_category(message, guild_id):
     predicted_category = label_encoder.inverse_transform([predicted_class_index])[0]
     
     return predicted_category, confidence
+
 def train(guild_id, model_save_path=None, test_size=0.2, random_state=42):
     """
     Train an NLP model to categorize messages into user-defined categories for a specific guild.
