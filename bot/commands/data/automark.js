@@ -59,13 +59,17 @@ async function execute(message) {
         if (res.status == 200) {
             message.reply('Message classified successfully!');
             targetCategory = res.data.category;
+        } else if (res.status == 400) {
+            return message.reply(res.data);
         } else {
-            return message.reply('Error classifying message: ' + res.statusText);
+            return message.reply('Error: ' + res.data);
         }
     }).catch(err => {
         console.log(err);
-        message.reply('Error classifying message: ' + err.message);
+        message.reply('Error classifying message: ' + err.response.data.error ? err.response.data.error : err.message);
     });
+
+    if (!targetCategory) return message.reply("Error: No category found for this message.");
 
 
     // update the categories discord category
